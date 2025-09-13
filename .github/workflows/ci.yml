@@ -15,11 +15,29 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install build-essential clang flex g++ gawk gcc-multilib gettext \
-            git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev
+          sudo apt install -y build-essential clang flex g++ gawk gcc-multilib gettext \
+            git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev jq
 
       - name: Checkout
         uses: actions/checkout@v3
+
+      # === Add AWR_WRT feed (from your repo) ===
+      - name: Add AWR_WRT feed
+        run: |
+          echo 'src-git awr https://github.com/awoadak-glitch/openwrt-awr-wrt.git' >> feeds.conf.default
+
+      # === Fetch overlay files (from your repo) into ./files ===
+      - name: Fetch overlay files
+        run: |
+          git clone https://github.com/awoadak-glitch/openwrt-awr-files.git overlay-src
+          rm -rf files
+          mv overlay-src/files files
+
+      # (Optional) Ensure executable bits for scripts in files/
+      - name: Fix file permissions (optional)
+        run: |
+          [ -d files/etc/init.d ] && chmod +x files/etc/init.d/* || true
+          [ -d files/etc/uci-defaults ] && chmod +x files/etc/uci-defaults/* || true
 
       - name: Hook the openwrt_core URL for opkg
         run: |
@@ -37,22 +55,21 @@ jobs:
 
       - name: Configure
         run: |
-          cat <<EOF | sed -E 's/^  //' >.config
-            CONFIG_TARGET_ipq50xx=y
-            CONFIG_TARGET_ipq50xx_arm=y
-            CONFIG_TARGET_MULTI_PROFILE=y
-            CONFIG_TARGET_ALL_PROFILES=y
-            CONFIG_TARGET_PER_DEVICE_ROOTFS=y
+          cat <<'EOF' >.config
+          CONFIG_TARGET_ipq50xx=y
+          CONFIG_TARGET_ipq50xx_arm=y
+          # جهاز محدد: Redmi AX3000
+          CONFIG_TARGET_DEVICE_ipq50xx_arm_DEVICE_redmi_ax3000=y
 
-            CONFIG_IB=y
-            # CONFIG_IB_STANDALONE is not set
-            CONFIG_SDK=y
-            CONFIG_MAKE_TOOLCHAIN=y
+          CONFIG_IB=y
+          CONFIG_SDK=y
+          CONFIG_MAKE_TOOLCHAIN=y
+          CONFIG_ALL_NONSHARED=y
+          CONFIG_REPRODUCIBLE_DEBUG_INFO=y
 
-            CONFIG_ALL_NONSHARED=y
-            CONFIG_REPRODUCIBLE_DEBUG_INFO=y
-
-            CONFIG_PACKAGE_luci=y
+          CONFIG_PACKAGE_luci=y
+          CONFIG_PACKAGE_luci-ssl=y
+          CONFIG_PACKAGE_luci-app-awr_wrt=y
           EOF
           make defconfig
 
